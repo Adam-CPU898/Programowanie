@@ -146,7 +146,89 @@ def main():
                     time.sleep(1)
             except KeyboardInterrupt:
                 continue
-        
+        elif wybor == "add_device":
+            # PROBLEM 2 NAPRAWIONY: Cały kreator opakowany w przechwytywanie Ctrl+C
+            try:
+                clear_screen()
+                print("=" * 55)
+                print("        KREATOR REJESTRACJI NOWEGO GNIAZDKA             ")
+                print("=" * 55)
+                
+                templates = [
+                    {"name": name, "power": power, "chance": chance} 
+                    for name, power, active, chance in PREDEFINED_DEVICES
+                ]
+                
+                typ_dodawania = inquirer.select(
+                    message="Wybierz sposób dodania urządzenia (Ctrl+C przerywa):",
+                    choices=[
+                        Choice(value="predefined", name="Wybierz gotowy szablon z listy"),
+                        Choice(value="custom", name="Stwórz własne urządzenie (ręczne parametry)")
+                    ]
+                ).execute()
+
+                v_name, v_power, v_chance = "", 0.0, 0.05
+
+                def check_if_float(text):
+                    try:
+                        float(text.replace(',', '.'))
+                        return True
+                    except ValueError:
+                        return "Wprowadź poprawną liczbę (np. 1500.5 lub 0,05)!"
+
+                if typ_dodawania == "predefined":
+                    choices_templates = [Choice(value=t, name=f"{t['name']} ({t['power']}W)") for t in templates]
+                    selected_t = inquirer.select(message="Wybierz szablon:", choices=choices_templates).execute()
+                    
+                    v_name = selected_t["name"]
+                    v_power = selected_t["power"]
+                    v_chance = selected_t["chance"]
+
+                    chce_edycji = inquirer.confirm(message="Czy chcesz ręcznie edytować parametry tego szablonu?", default=False).execute()
+                    if chce_edycji:
+                        v_name = inquirer.text(message="Nazwa urządzenia:", default=v_name).execute()
+                        res_power = inquirer.text(message="Moc nominalna (W):", default=str(v_power), validate=check_if_float).execute()
+                        v_power = float(res_power.replace(',', '.'))
+                        res_chance = inquirer.text(message="Szansa na tryb standby (0.0 - 1.0):", default=str(v_chance), validate=check_if_float).execute()
+                        v_chance = float(res_chance.replace(',', '.'))
+
+                elif typ_dodawania == "custom":
+                    try:
+                        v_name = inquirer.text(message="Wpisz unikalną nazwę urządzenia:").execute()
+                        res_power = inquirer.text(message="Podaj moc nominalną (w Watach):", validate=check_if_float).execute()
+                        v_power = float(res_power.replace(',', '.'))
+                        res_chance = inquirer.text(message="Podaj szansę na standby (np. 0.05 dla 5%):", default="0.05", validate=check_if_float).execute()
+                        v_chance = float(res_chance.replace(',', '.'))
+                    except Exception:
+                        return print("Wprowadź poprawny typ danych !")
+
+                if v_name:
+                    stan_poczatkowy = inquirer.confirm(message="Czy gniazdko ma być domyślnie włączone?", default=True).execute()
+                    
+                    payload = {
+                        "name": v_name,
+                        "nominal_power": v_power,
+                        "is_active": stan_poczatkowy,
+                        "standby_chance": v_chance
+                    }
+                    
+                    try:
+                        res = requests.post(f"{SERVER_URL}/device/add", json=payload)
+                        if res.status_code == 200:
+                            print(f"\n[SUKCES] Dodano urządzenie: {v_name} do systemu!")
+                            time.sleep(2)
+                        else:
+                            print(f"\n[BŁĄD SERWERA] {res.json().get('detail')}, 5s...")
+                            time.sleep(5)
+                    except Exception:
+                        print("\n[BŁĄD] Brak połączenia z serwerem API przy dodawaniu.")
+                        time.sleep(3)
+                        
+            except KeyboardInterrupt:
+                # Łagodne przechwycenie przerywa kreator i wraca do pętli głównej
+                print("\nAnulowano dodawanie urządzenia. Powrót...")
+                time.sleep(1)
+                continue
 
 if __name__ == "__main__":
     main()
